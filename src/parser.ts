@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import type { Page } from './types.js';
+import type { Page, PageImage } from './types.js';
 
 function clean(text: string | undefined): string | null {
   const trimmed = text?.trim();
@@ -37,6 +37,12 @@ export function parsePage(html: string, url: string, status = 200): Page {
     if (link) links.add(link);
   });
 
+  const images: PageImage[] = [];
+  $('img').each((_, el) => {
+    const src = toAbsolute($(el).attr('src'), url);
+    if (src) images.push({ src, alt: $(el).attr('alt') ?? null });
+  });
+
   return {
     url,
     status,
@@ -44,6 +50,6 @@ export function parsePage(html: string, url: string, status = 200): Page {
     metaDescription: clean($('meta[name="description"]').first().attr('content')),
     ogTags,
     links: [...links],
-    images: [],
+    images,
   };
 }

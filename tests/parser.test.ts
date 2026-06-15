@@ -78,3 +78,26 @@ describe('parsePage: links', () => {
     expect(parsePage('<a name="top">x</a>', url).links).toEqual([]);
   });
 });
+
+describe('parsePage: images', () => {
+  it('collects images with absolute src and alt text', () => {
+    const html =
+      '<img src="/a.png" alt="Logo"><img src="https://cdn.example.com/b.jpg" alt="Photo">';
+    expect(parsePage(html, url).images).toEqual([
+      { src: 'https://example.com/a.png', alt: 'Logo' },
+      { src: 'https://cdn.example.com/b.jpg', alt: 'Photo' },
+    ]);
+  });
+
+  it('tells a missing alt from an empty one', () => {
+    const html = '<img src="/a.png"><img src="/b.png" alt="">';
+    expect(parsePage(html, url).images).toEqual([
+      { src: 'https://example.com/a.png', alt: null },
+      { src: 'https://example.com/b.png', alt: '' },
+    ]);
+  });
+
+  it('skips images without src', () => {
+    expect(parsePage('<img alt="nothing">', url).images).toEqual([]);
+  });
+});
