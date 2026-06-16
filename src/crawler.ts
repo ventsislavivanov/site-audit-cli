@@ -27,6 +27,29 @@ export function normalizeUrl(href: string, base: string): string | null {
   }
 }
 
+const CONCURRENCY = 3;
+
+// Run fn on every item with at most `limit` calls in flight at once.
+// Results keep the order of the input.
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 async function fetchPage(url: string, timeout: number): Promise<Page> {
   const res = await fetch(url, {
     signal: AbortSignal.timeout(timeout),
@@ -50,10 +73,10 @@ export async function crawl(startUrl: string, options: CrawlOptions): Promise<Cr
 
   for (let depth = 0; level.length > 0 && depth <= options.depth; depth++) {
     const next: string[] = [];
-    for (const url of level) {
-      const page = await fetchPage(url, options.timeout);
+    const fetched = await mapLimit(level, CONCURRENCY, (url) => fetchPage(url, options.timeout));
+    for (const [i, page] of fetched.entries()) {
       pages.push(page);
-      statuses.set(url, page.status);
+      statuses.set(level[i], page.status);
 
       for (const link of page.links) {
         const normalized = normalizeUrl(link, page.url);

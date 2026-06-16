@@ -80,6 +80,21 @@ describe('crawl', () => {
     expect(server.requests).toEqual(['/', '/a']);
   });
 
+  it('fetches at most 3 pages at the same time', async () => {
+    const routes: Record<string, { body: string; delayMs: number }> = {
+      '/': {
+        body: Array.from({ length: 8 }, (_, i) => `<a href="/p${i}">p</a>`).join(''),
+        delayMs: 0,
+      },
+    };
+    for (let i = 0; i < 8; i++) routes[`/p${i}`] = { body: '<p>x</p>', delayMs: 60 };
+    server = await startServer(routes);
+
+    const { pages } = await crawl(server.url + '/', options);
+    expect(pages).toHaveLength(9);
+    expect(server.maxActive()).toBe(3);
+  });
+
   it('visits each page once even with loops and fragments', async () => {
     server = await startServer({
       '/': '<a href="/a">a</a><a href="/a#top">a again</a>',
