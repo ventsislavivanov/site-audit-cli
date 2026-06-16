@@ -51,6 +51,35 @@ describe('crawl', () => {
     expect([...statuses.keys()]).toEqual([server.url + '/', server.url + '/a']);
   });
 
+  it('stops at the depth limit', async () => {
+    server = await startServer({
+      '/': '<a href="/a">a</a>',
+      '/a': '<a href="/b">b</a>',
+      '/b': '<a href="/c">c</a>',
+      '/c': '<p>end</p>',
+    });
+    await crawl(server.url + '/', { ...options, depth: 2 });
+    expect(server.requests).toEqual(['/', '/a', '/b']);
+  });
+
+  it('only fetches the start page at depth 0', async () => {
+    server = await startServer({ '/': '<a href="/a">a</a>', '/a': '<p>a</p>' });
+    await crawl(server.url + '/', { ...options, depth: 0 });
+    expect(server.requests).toEqual(['/']);
+  });
+
+  it('stops at the page limit', async () => {
+    server = await startServer({
+      '/': '<a href="/a">a</a><a href="/b">b</a><a href="/c">c</a>',
+      '/a': '<p>a</p>',
+      '/b': '<p>b</p>',
+      '/c': '<p>c</p>',
+    });
+    const { pages } = await crawl(server.url + '/', { ...options, maxPages: 2 });
+    expect(pages).toHaveLength(2);
+    expect(server.requests).toEqual(['/', '/a']);
+  });
+
   it('visits each page once even with loops and fragments', async () => {
     server = await startServer({
       '/': '<a href="/a">a</a><a href="/a#top">a again</a>',

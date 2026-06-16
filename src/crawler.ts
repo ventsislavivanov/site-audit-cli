@@ -57,10 +57,11 @@ export async function crawl(startUrl: string, options: CrawlOptions): Promise<Cr
 
       for (const link of page.links) {
         const normalized = normalizeUrl(link, page.url);
-        if (normalized && new URL(normalized).origin === origin && !seen.has(normalized)) {
-          seen.add(normalized);
-          next.push(normalized);
-        }
+        if (!normalized || seen.has(normalized)) continue;
+        if (new URL(normalized).origin !== origin) continue;
+        if (seen.size >= options.maxPages) continue;
+        seen.add(normalized);
+        next.push(normalized);
       }
     }
     level = next;
