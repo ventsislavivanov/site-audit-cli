@@ -50,13 +50,29 @@ async function mapLimit<T, R>(
   return results;
 }
 
-async function fetchPage(url: string, timeout: number): Promise<Page> {
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(timeout),
-    headers: { accept: 'text/html' },
-  });
-  const html = await res.text();
-  return parsePage(html, res.url, res.status);
+interface Fetched {
+  // 0 when the request failed (timeout, connection refused, DNS)
+  status: number;
+  // null for error responses, non-HTML responses and failed requests
+  page: Page | null;
+}
+
+async function fetchPage(url: string, timeout: number): Promise<Fetched> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(timeout),
+      headers: { accept: 'text/html' },
+    });
+    const isHtml = (res.headers.get('content-type') ?? '').includes('text/html');
+    if (!res.ok || !isHtml) {
+      await res.body?.cancel();
+      return { status: res.status, page: null };
+    }
+    const html = await res.text();
+    return { status: res.status, page: parsePage(html, res.url, res.status) };
+  } catch {
+    return { status: 0, page: null };
+  }
 }
 
 // Breadth-first crawl of one site. Only links on the same origin as the
@@ -74,9 +90,10 @@ export async function crawl(startUrl: string, options: CrawlOptions): Promise<Cr
   for (let depth = 0; level.length > 0 && depth <= options.depth; depth++) {
     const next: string[] = [];
     const fetched = await mapLimit(level, CONCURRENCY, (url) => fetchPage(url, options.timeout));
-    for (const [i, page] of fetched.entries()) {
+    for (const [i, { status, page }] of fetched.entries()) {
+      statuses.set(level[i], status);
+      if (!page) continue;
       pages.push(page);
-      statuses.set(level[i], page.status);
 
       for (const link of page.links) {
         const normalized = normalizeUrl(link, page.url);

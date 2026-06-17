@@ -95,6 +95,47 @@ describe('crawl', () => {
     expect(server.maxActive()).toBe(3);
   });
 
+  it('records a 404 but does not treat it as a page', async () => {
+    server = await startServer({ '/': '<a href="/missing">gone</a>' });
+    const { pages, statuses } = await crawl(server.url + '/', options);
+    expect(pages).toHaveLength(1);
+    expect(statuses.get(server.url + '/missing')).toBe(404);
+  });
+
+  it('records status 0 when a request times out', async () => {
+    server = await startServer({
+      '/': '<a href="/slow">slow</a><a href="/fast">fast</a>',
+      '/slow': { body: '<p>slow</p>', delayMs: 500 },
+      '/fast': '<p>fast</p>',
+    });
+    const { pages, statuses } = await crawl(server.url + '/', { ...options, timeout: 100 });
+    expect(statuses.get(server.url + '/slow')).toBe(0);
+    expect(pages.map((p) => p.url)).toEqual([server.url + '/', server.url + '/fast']);
+  });
+
+  it('does not parse or follow non-html responses', async () => {
+    server = await startServer({
+      '/': '<a href="/data.json">data</a>',
+      '/data.json': { type: 'application/json', body: '{"a":"<a href=\'/secret\'>x</a>"}' },
+    });
+    const { pages, statuses } = await crawl(server.url + '/', options);
+    expect(pages).toHaveLength(1);
+    expect(statuses.get(server.url + '/data.json')).toBe(200);
+    expect(server.requests).not.toContain('/secret');
+  });
+
+  it('survives a start url that cannot be reached', async () => {
+    server = await startServer({});
+    const { pages, statuses } = await crawl('http://127.0.0.1:1/', options);
+    expect(pages).toEqual([]);
+    expect(statuses.get('http://127.0.0.1:1/')).toBe(0);
+  });
+
+  it('throws on an invalid start url', async () => {
+    server = await startServer({});
+    await expect(crawl('not a url', options)).rejects.toThrow('invalid start url');
+  });
+
   it('visits each page once even with loops and fragments', async () => {
     server = await startServer({
       '/': '<a href="/a">a</a><a href="/a#top">a again</a>',
