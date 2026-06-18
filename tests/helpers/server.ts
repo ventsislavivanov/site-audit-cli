@@ -29,7 +29,10 @@ export async function startServer(routes: Record<string, string | Route>) {
       active--;
     });
     setTimeout(() => {
-      res.writeHead(route.status ?? 200, { 'content-type': route.type ?? 'text/html' });
+      res.writeHead(route.status ?? 200, {
+        'content-type': route.type ?? 'text/html',
+        'content-length': Buffer.byteLength(body),
+      });
       res.end(body);
     }, route.delayMs ?? 0);
   });
