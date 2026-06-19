@@ -25,3 +25,9 @@ export interface Page {
   links: string[];
   images: PageImage[];
 }
+
+export interface Report {
+  startUrl: string;
+  pagesCrawled: number;
+  issues: Issue[];
+}
