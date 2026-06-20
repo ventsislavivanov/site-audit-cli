@@ -1,4 +1,8 @@
 import { Command, CommanderError, InvalidArgumentError } from 'commander';
+import { runAudit } from './audit.js';
+import { formatJson } from './report/json.js';
+import { exitCodeFor } from './report/summary.js';
+import { formatTable } from './report/table.js';
 
 export interface Options {
   url: string;
@@ -32,16 +36,25 @@ export function parseArgs(argv: string[]): Options {
   return { url: program.args[0], ...opts };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   try {
     const options = parseArgs(process.argv.slice(2));
-    console.log(options);
+    const report = await runAudit(options.url, {
+      depth: options.depth,
+      maxPages: options.maxPages,
+      timeout: options.timeout,
+    });
+    const output = options.json ? formatJson(report) : formatTable(report);
+    process.stdout.write(output + '\n');
+    process.exitCode = exitCodeFor(report.issues);
   } catch (err) {
     if (err instanceof CommanderError) {
       // commander has already printed the message; help and version are not errors
       process.exit(err.exitCode === 0 ? 0 : 2);
     }
-    throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`error: ${message}\n`);
+    process.exitCode = 2;
   }
 }
 
