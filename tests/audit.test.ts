@@ -40,8 +40,37 @@ describe('runAudit', () => {
     expect(report.issues).toEqual([]);
   });
 
-  it('throws when the start page cannot be loaded', async () => {
+  it('says why the start page cannot be loaded: HTTP error', async () => {
     server = await startServer({});
-    await expect(runAudit(server.url + '/', options)).rejects.toThrow('status 404');
+    await expect(runAudit(server.url + '/', options)).rejects.toThrow(
+      `could not load ${server.url}/: HTTP 404`,
+    );
+  });
+
+  it('says why the start page cannot be loaded: not HTML', async () => {
+    server = await startServer({ '/': { type: 'application/json', body: '{}' } });
+    await expect(runAudit(server.url + '/', options)).rejects.toThrow(
+      'not an HTML page (application/json)',
+    );
+  });
+
+  it('says why the start page cannot be loaded: connection refused', async () => {
+    server = await startServer({});
+    const closedUrl = server.url + '/';
+    await server.close();
+    await expect(runAudit(closedUrl, options)).rejects.toThrow('connection refused');
+  });
+
+  it('says why the start page cannot be loaded: timeout', async () => {
+    server = await startServer({ '/': { body: '<p>slow</p>', delayMs: 500 } });
+    await expect(runAudit(server.url + '/', { ...options, timeout: 100 })).rejects.toThrow(
+      'timed out after 100 ms',
+    );
+  });
+
+  it('rejects a start url that is not http(s)', async () => {
+    server = await startServer({});
+    await expect(runAudit('ftp://example.com/', options)).rejects.toThrow('invalid start url');
+    await expect(runAudit('example.com', options)).rejects.toThrow('https://example.com');
   });
 });

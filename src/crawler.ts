@@ -87,7 +87,11 @@ async function fetchPage(url: string, timeout: number): Promise<Fetched> {
 // start url are followed.
 export async function crawl(startUrl: string, options: CrawlOptions): Promise<CrawlResult> {
   const start = normalizeUrl(startUrl, startUrl);
-  if (!start) throw new Error(`invalid start url: ${startUrl}`);
+  if (!start) {
+    throw new Error(
+      `invalid start url "${startUrl}" (use a full address like https://example.com)`,
+    );
+  }
   const origin = new URL(start).origin;
 
   const pages: Page[] = [];

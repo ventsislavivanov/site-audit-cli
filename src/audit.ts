@@ -9,13 +9,12 @@ import type { Issue, Report } from './types.js';
 
 // Crawl the site and run every check on every page that was fetched.
 export async function runAudit(startUrl: string, options: CrawlOptions): Promise<Report> {
-  const { pages, statuses } = await crawl(startUrl, options);
+  const { pages, statuses, failures } = await crawl(startUrl, options);
 
   if (pages.length === 0) {
-    const status = statuses.get([...statuses.keys()][0]);
-    throw new Error(
-      `could not load ${startUrl} (${status ? `status ${status}` : 'request failed'})`,
-    );
+    // only the start page was requested, so this is its failure
+    const reason = [...failures.values()][0] ?? 'no HTML page found';
+    throw new Error(`could not load ${startUrl}: ${reason}`);
   }
 
   const issues: Issue[] = [];
