@@ -1,3 +1,4 @@
+import { describeFetchError } from './errors.js';
 import { parsePage } from './parser.js';
 import type { Page } from './types.js';
 
@@ -12,6 +13,8 @@ export interface CrawlResult {
   pages: Page[];
   // http status for every url that was requested
   statuses: Map<string, number>;
+  // url -> reason, for requested urls that did not give an HTML page
+  failures: Map<string, string>;
 }
 
 // Resolve href against base and drop the #fragment. Returns null for
@@ -55,6 +58,8 @@ interface Fetched {
   status: number;
   // null for error responses, non-HTML responses and failed requests
   page: Page | null;
+  // why there is no page, in plain words
+  failure?: string;
 }
 
 async function fetchPage(url: string, timeout: number): Promise<Fetched> {
@@ -63,15 +68,18 @@ async function fetchPage(url: string, timeout: number): Promise<Fetched> {
       signal: AbortSignal.timeout(timeout),
       headers: { accept: 'text/html' },
     });
-    const isHtml = (res.headers.get('content-type') ?? '').includes('text/html');
-    if (!res.ok || !isHtml) {
+    const type = res.headers.get('content-type') ?? '';
+    if (!res.ok || !type.includes('text/html')) {
       await res.body?.cancel();
-      return { status: res.status, page: null };
+      const failure = res.ok
+        ? `not an HTML page (${type || 'no content-type'})`
+        : `HTTP ${res.status}`;
+      return { status: res.status, page: null, failure };
     }
     const html = await res.text();
     return { status: res.status, page: parsePage(html, res.url, res.status) };
-  } catch {
-    return { status: 0, page: null };
+  } catch (err) {
+    return { status: 0, page: null, failure: describeFetchError(err, timeout) };
   }
 }
 
@@ -84,15 +92,19 @@ export async function crawl(startUrl: string, options: CrawlOptions): Promise<Cr
 
   const pages: Page[] = [];
   const statuses = new Map<string, number>();
+  const failures = new Map<string, string>();
   const seen = new Set([start]);
   let level = [start];
 
   for (let depth = 0; level.length > 0 && depth <= options.depth; depth++) {
     const next: string[] = [];
     const fetched = await mapLimit(level, CONCURRENCY, (url) => fetchPage(url, options.timeout));
-    for (const [i, { status, page }] of fetched.entries()) {
+    for (const [i, { status, page, failure }] of fetched.entries()) {
       statuses.set(level[i], status);
-      if (!page) continue;
+      if (!page) {
+        if (failure) failures.set(level[i], failure);
+        continue;
+      }
       pages.push(page);
 
       for (const link of page.links) {
@@ -107,5 +119,5 @@ export async function crawl(startUrl: string, options: CrawlOptions): Promise<Cr
     level = next;
   }
 
-  return { pages, statuses };
+  return { pages, statuses, failures };
 }

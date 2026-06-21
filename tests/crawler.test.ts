@@ -131,6 +131,27 @@ describe('crawl', () => {
     expect(statuses.get('http://127.0.0.1:1/')).toBe(0);
   });
 
+  it('explains why a url gave no page', async () => {
+    server = await startServer({
+      '/': '<a href="/missing">m</a><a href="/slow">s</a><a href="/data.json">d</a>',
+      '/slow': { body: '<p>slow</p>', delayMs: 500 },
+      '/data.json': { type: 'application/json', body: '{}' },
+    });
+    const { failures } = await crawl(server.url + '/', { ...options, timeout: 100 });
+    expect(failures.get(server.url + '/missing')).toBe('HTTP 404');
+    expect(failures.get(server.url + '/slow')).toBe('timed out after 100 ms');
+    expect(failures.get(server.url + '/data.json')).toBe('not an HTML page (application/json)');
+    expect(failures.has(server.url + '/')).toBe(false);
+  });
+
+  it('explains a refused connection', async () => {
+    server = await startServer({});
+    const closedUrl = server.url + '/';
+    await server.close();
+    const { failures } = await crawl(closedUrl, options);
+    expect(failures.get(closedUrl)).toBe('connection refused');
+  });
+
   it('throws on an invalid start url', async () => {
     server = await startServer({});
     await expect(crawl('not a url', options)).rejects.toThrow('invalid start url');
