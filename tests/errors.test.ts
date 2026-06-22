@@ -29,6 +29,11 @@ describe('describeFetchError', () => {
     );
   });
 
+  it('explains a port that fetch refuses to use', () => {
+    const err = new TypeError('fetch failed', { cause: new Error('bad port') });
+    expect(describeFetchError(err, 1000)).toBe('port is blocked by fetch');
+  });
+
   it('falls back to the cause message, then the error message', () => {
     const withCause = new TypeError('fetch failed', { cause: new Error('something odd') });
     expect(describeFetchError(withCause, 1000)).toBe('something odd');
