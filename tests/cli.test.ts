@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../src/cli.js';
 
 describe('parseArgs', () => {
@@ -30,6 +30,23 @@ describe('parseArgs', () => {
       json: true,
       timeout: 5000,
     });
+  });
+
+  it('prints help with examples and exit codes', () => {
+    const chunks: string[] = [];
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      chunks.push(String(chunk));
+      return true;
+    });
+    try {
+      expect(() => parseArgs(['--help'])).toThrow();
+    } finally {
+      write.mockRestore();
+    }
+    const help = chunks.join('');
+    expect(help).toContain('--max-pages <n>');
+    expect(help).toContain('Examples:');
+    expect(help).toContain('Exit codes:');
   });
 
   it('rejects a missing url', () => {

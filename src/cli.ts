@@ -1,8 +1,12 @@
+import { createRequire } from 'node:module';
 import { Command, CommanderError, InvalidArgumentError } from 'commander';
 import { runAudit } from './audit.js';
 import { formatJson } from './report/json.js';
 import { exitCodeFor } from './report/summary.js';
 import { formatTable } from './report/table.js';
+
+// package.json is one level above both src/ and dist/
+const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 
 export interface Options {
   url: string;
@@ -24,11 +28,26 @@ export function parseArgs(argv: string[]): Options {
   const program = new Command();
   program
     .name('siteaudit')
-    .argument('<url>', 'start URL to crawl')
-    .option('--depth <n>', 'how many links deep to follow', parseNumber, 2)
-    .option('--max-pages <n>', 'stop after this many pages', parseNumber, 50)
-    .option('--json', 'print the report as JSON', false)
-    .option('--timeout <ms>', 'request timeout in milliseconds', parseNumber, 10000)
+    .description('Crawl a website and report broken links, missing meta tags and image problems.')
+    .version(version, '-V, --version')
+    .argument('<url>', 'start URL to crawl, for example https://example.com')
+    .option('--depth <n>', 'how many links deep to follow from the start page', parseNumber, 2)
+    .option('--max-pages <n>', 'stop after crawling this many pages', parseNumber, 50)
+    .option('--json', 'print the report as JSON instead of a table', false)
+    .option('--timeout <ms>', 'timeout for each request in milliseconds', parseNumber, 10000)
+    .addHelpText(
+      'after',
+      `
+Examples:
+  siteaudit https://example.com
+  siteaudit https://example.com --depth 3 --max-pages 100
+  siteaudit https://example.com --json > report.json
+
+Exit codes:
+  0  no errors found (warnings are allowed)
+  1  errors found
+  2  bad usage or a crash`,
+    )
     .exitOverride();
 
   program.parse(argv, { from: 'user' });
