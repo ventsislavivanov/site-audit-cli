@@ -1,4 +1,7 @@
+#!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { Command, CommanderError, InvalidArgumentError } from 'commander';
 import { runAudit } from './audit.js';
 import { formatJson } from './report/json.js';
@@ -77,6 +80,8 @@ async function main(): Promise<void> {
   }
 }
 
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+// Only run when started as a program, not when imported by the tests.
+// realpath because an installed bin is a symlink to this file.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main();
 }

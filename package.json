@@ -4,6 +4,12 @@
   "description": "Crawl a website and report common SEO and content problems",
   "type": "module",
   "license": "MIT",
+  "bin": {
+    "siteaudit": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=22"
   },
