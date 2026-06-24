@@ -1,3 +1,5 @@
+import { normalizeUrl } from './crawler.js';
+import type { Page } from './types.js';
 import { mapLimit } from './mapLimit.js';
 
 const CONCURRENCY = 3;
@@ -26,4 +28,18 @@ export async function fetchLinkStatuses(
   const distinct = [...new Set(urls)];
   const statuses = await mapLimit(distinct, CONCURRENCY, (url) => checkLink(url, timeout));
   return new Map(distinct.map((url, i) => [url, statuses[i]]));
+}
+
+// Every http(s) link on the crawled pages that the crawler did not request
+// itself: other sites, and pages beyond the depth or page limit. mailto:,
+// tel: and javascript: links are not http(s), so they never get here.
+export function unvisitedLinks(pages: Page[], statuses: Map<string, number>): string[] {
+  const unvisited = new Set<string>();
+  for (const page of pages) {
+    for (const link of page.links) {
+      const url = normalizeUrl(link, page.url);
+      if (url && !statuses.has(url)) unvisited.add(url);
+    }
+  }
+  return [...unvisited];
 }

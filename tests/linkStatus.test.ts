@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkLink, fetchLinkStatuses } from '../src/linkStatus.js';
+import { checkLink, fetchLinkStatuses, unvisitedLinks } from '../src/linkStatus.js';
+import { parsePage } from '../src/parser.js';
 import { startServer } from './helpers/server.js';
 
 describe('checkLink', () => {
@@ -75,5 +76,33 @@ describe('fetchLinkStatuses', () => {
 
     expect(statuses.size).toBe(8);
     expect(server.maxActive()).toBe(3);
+  });
+});
+
+describe('unvisitedLinks', () => {
+  const url = 'https://example.com/';
+
+  it('returns links that are not in the status map', () => {
+    const page = parsePage('<a href="/seen">s</a><a href="/new">n</a>', url);
+    const statuses = new Map([['https://example.com/seen', 200]]);
+    expect(unvisitedLinks([page], statuses)).toEqual(['https://example.com/new']);
+  });
+
+  it('includes external links', () => {
+    const page = parsePage('<a href="https://other.com/x">x</a>', url);
+    expect(unvisitedLinks([page], new Map())).toEqual(['https://other.com/x']);
+  });
+
+  it('lists each url once across pages, ignoring fragments', () => {
+    const one = parsePage('<a href="/x#a">x</a>', url);
+    const two = parsePage('<a href="/x#b">x</a><a href="/x">x</a>', 'https://example.com/two');
+    expect(unvisitedLinks([one, two], new Map())).toEqual(['https://example.com/x']);
+  });
+
+  it('skips mailto, tel and javascript links', () => {
+    const html = `<a href="mailto:a@b.com">m</a>
+      <a href="tel:123">t</a>
+      <a href="javascript:void(0)">j</a>`;
+    expect(unvisitedLinks([parsePage(html, url)], new Map())).toEqual([]);
   });
 });
