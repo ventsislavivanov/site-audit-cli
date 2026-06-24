@@ -29,6 +29,95 @@ describe('runAudit', () => {
     expect(found).not.toContain('meta-tags: /');
   });
 
+  describe('links the crawler does not visit', () => {
+    let other: Awaited<ReturnType<typeof startServer>>;
+
+    afterEach(async () => {
+      await other?.close();
+    });
+
+    const brokenMessages = (report: Awaited<ReturnType<typeof runAudit>>) =>
+      report.issues.filter((i) => i.check === 'broken-links').map((i) => i.message);
+
+    it('reports a broken external link', async () => {
+      other = await startServer({ '/fine': 'ok' });
+      server = await startServer({
+        '/': `<title>Home</title>
+          <a href="${other.url}/fine">fine</a><a href="${other.url}/dead">dead</a>`,
+      });
+
+      const report = await runAudit(server.url + '/', options);
+
+      expect(brokenMessages(report)).toEqual([`Broken link: ${other.url}/dead (404)`]);
+      expect(other.calls).toEqual(['HEAD /fine', 'HEAD /dead']);
+    });
+
+    it('reports a broken link beyond the depth limit', async () => {
+      server = await startServer({
+        '/': '<title>Home</title><a href="/a">a</a>',
+        '/a': '<title>A</title><a href="/b">b</a><a href="/gone">gone</a>',
+        '/b': '<title>B</title>',
+      });
+
+      const report = await runAudit(server.url + '/', { ...options, depth: 1 });
+
+      expect(report.pagesCrawled).toBe(2);
+      expect(brokenMessages(report)).toEqual([`Broken link: ${server.url}/gone (404)`]);
+      // /b was only checked with HEAD, never crawled
+      expect(server.calls).toContain('HEAD /b');
+      expect(server.calls).not.toContain('GET /b');
+    });
+
+    it('reports a broken link beyond the page limit', async () => {
+      server = await startServer({
+        '/': '<title>Home</title><a href="/a">a</a><a href="/gone">gone</a>',
+        '/a': '<title>A</title>',
+      });
+
+      const report = await runAudit(server.url + '/', { ...options, maxPages: 2 });
+
+      expect(brokenMessages(report)).toEqual([`Broken link: ${server.url}/gone (404)`]);
+    });
+
+    it('checks a url shared by several pages only once', async () => {
+      other = await startServer({});
+      server = await startServer({
+        '/': `<title>Home</title><a href="/two">two</a><a href="${other.url}/x">x</a>`,
+        '/two': `<title>Two</title><a href="${other.url}/x#top">x</a>`,
+      });
+
+      const report = await runAudit(server.url + '/', options);
+
+      expect(other.calls).toEqual(['HEAD /x']);
+      // the broken link is still reported on both pages
+      expect(brokenMessages(report)).toHaveLength(2);
+    });
+
+    it('does not request mailto, tel or javascript links', async () => {
+      server = await startServer({
+        '/': `<title>Home</title><a href="mailto:a@b.com">m</a>
+          <a href="tel:+123">t</a><a href="javascript:void(0)">j</a>`,
+      });
+
+      const report = await runAudit(server.url + '/', options);
+
+      expect(brokenMessages(report)).toEqual([]);
+      expect(server.calls).toEqual(['GET /']);
+    });
+
+    it('falls back to GET for servers that refuse HEAD', async () => {
+      other = await startServer({ '/picky': { body: 'ok', noHead: true } });
+      server = await startServer({
+        '/': `<title>Home</title><a href="${other.url}/picky">picky</a>`,
+      });
+
+      const report = await runAudit(server.url + '/', options);
+
+      expect(brokenMessages(report)).toEqual([]);
+      expect(other.calls).toEqual(['HEAD /picky', 'GET /picky']);
+    });
+  });
+
   it('gives a clean report for a good page', async () => {
     server = await startServer({
       '/': `<title>Home</title><meta name="description" content="Home page">

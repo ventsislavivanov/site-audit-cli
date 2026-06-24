@@ -4,6 +4,7 @@ import { checkImageSize } from './checks/imageSize.js';
 import { checkMetaTags } from './checks/metaTags.js';
 import { checkOpenGraph } from './checks/openGraph.js';
 import { crawl } from './crawler.js';
+import { fetchLinkStatuses, unvisitedLinks } from './linkStatus.js';
 import type { CrawlOptions } from './crawler.js';
 import type { Issue, Report } from './types.js';
 
@@ -16,6 +17,11 @@ export async function runAudit(startUrl: string, options: CrawlOptions): Promise
     const reason = [...failures.values()][0] ?? 'no HTML page found';
     throw new Error(`could not load ${startUrl}: ${reason}`);
   }
+
+  // links the crawler did not follow (other sites, beyond the limits) still
+  // need a status so that broken ones can be reported
+  const extra = await fetchLinkStatuses(unvisitedLinks(pages, statuses), options.timeout);
+  for (const [url, status] of extra) statuses.set(url, status);
 
   const issues: Issue[] = [];
   const imageSizes = new Map<string, number | null>();

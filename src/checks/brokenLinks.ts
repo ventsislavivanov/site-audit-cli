@@ -1,9 +1,9 @@
 import { normalizeUrl } from '../crawler.js';
 import type { Issue, Page } from '../types.js';
 
-// Looks up every link on the page in the status map from the crawl.
-// Links that were never requested (other origins, beyond the depth or
-// page limit) are not in the map and are not reported.
+// Looks up every link on the page in the status map. The map has the
+// crawled pages and the other links checked after the crawl; a link that
+// is not in it is skipped.
 export function checkBrokenLinks(page: Page, statuses: Map<string, number>): Issue[] {
   const issues: Issue[] = [];
   const reported = new Set<string>();
