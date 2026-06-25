@@ -68,8 +68,10 @@ Exit codes: `0` no errors found (warnings are allowed), `1` errors found, `2` ba
 | `meta-tags`    | missing meta description                                  | warning  |
 | `open-graph`   | missing `og:title`, `og:description` or `og:image`        | warning  |
 | `image-alt`    | `<img>` without an `alt` attribute (`alt=""` is accepted) | error    |
-| `broken-links` | links that returned 4xx, 5xx or failed                    | error    |
+| `broken-links` | links that returned 4xx or 5xx, or did not answer         | error    |
 | `image-size`   | images larger than 300 KB (checked with a HEAD request)   | warning  |
+
+The broken link check covers every `http(s)` link on the crawled pages, including links to other sites and links the crawler did not follow. Pages the crawler visits are already checked by the crawl. All other links get a HEAD request (GET if the server answers 405 or 501), three at a time, and each URL is checked once even if many pages link to it. `mailto:`, `tel:` and `javascript:` links are skipped.
 
 ## Development
 
@@ -87,8 +89,10 @@ Tests do not use the internet. They start a local HTTP server and serve small HT
 ## Limitations
 
 - No JavaScript rendering. Only the HTML the server sends is checked, so content added by scripts is not seen.
-- Only links on the same origin as the start URL are followed.
-- A link is only reported as broken if the crawler requested it. Links to other sites, and links beyond `--depth` or `--max-pages`, are not checked.
+- Only links on the same origin as the start URL are crawled. Links to other sites, and links beyond `--depth` or `--max-pages`, are not crawled but are still checked for being broken (see below).
+- Those extra link checks use a HEAD request, so the status is what the server answers to HEAD. A site that blocks bots, rate-limits you or answers HEAD differently from GET can be reported as broken when it is not (for example a 403 or 429). Check such links by hand.
+- A link that does not answer within `--timeout` is reported as broken.
+- A site with many links makes many extra requests, three at a time, so a large crawl takes longer.
 - `robots.txt` is not read.
 
 ## License
